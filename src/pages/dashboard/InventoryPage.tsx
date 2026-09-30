@@ -7,7 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { AlertTriangle, Plus, Pencil, Trash2, Package, Minus, Search, Download } from "lucide-react";
+import { AlertTriangle, Plus, Pencil, Trash2, Package, Minus, Search, Download, History, ArrowLeftRight, FileText } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { InventoryHistoryTab } from "@/components/dashboard/inventory/InventoryHistoryTab";
+import { InventoryTransfersTab, TransferDialog } from "@/components/dashboard/inventory/InventoryTransfersTab";
+import { InventoryReportsTab } from "@/components/dashboard/inventory/InventoryReportsTab";
+import { ItemHistoryDialog } from "@/components/dashboard/inventory/ItemHistoryDialog";
 import { toast } from "@/hooks/use-toast";
 import { useInventory, useAddInventoryItem, useDeleteInventoryItem } from "@/hooks/useInventory";
 import { EditInventoryDialog } from "@/components/dashboard/EditInventoryDialog";
@@ -30,7 +35,11 @@ export default function InventoryPage() {
   const orgRole = currentOrg?.role || "";
   const canManageStock = ["owner", "admin", "receptionist", "dentist", "assistant", "hygienist"].includes(orgRole);
   const canDelete = ["owner", "admin", "receptionist"].includes(orgRole);
+  const canTransfer = ["owner", "admin"].includes(orgRole);
   const createTx = useCreateInventoryTransaction();
+  const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null);
+  const [transferItemId, setTransferItemId] = useState<string | null>(null);
+  const [reduceNotes, setReduceNotes] = useState("");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "low" | "out" | "expiring">("all");
   const [catFilter, setCatFilter] = useState("all");
@@ -199,6 +208,15 @@ export default function InventoryPage() {
         </Button>
       </PageHeader>
 
+      <Tabs defaultValue="stock" className="space-y-4">
+        <TabsList className="flex-wrap h-auto">
+          <TabsTrigger value="stock"><Package className="mr-1.5 h-3.5 w-3.5" />Stock</TabsTrigger>
+          <TabsTrigger value="history"><History className="mr-1.5 h-3.5 w-3.5" />Movement history</TabsTrigger>
+          <TabsTrigger value="transfers"><ArrowLeftRight className="mr-1.5 h-3.5 w-3.5" />Branch transfers</TabsTrigger>
+          <TabsTrigger value="reports"><FileText className="mr-1.5 h-3.5 w-3.5" />Reports</TabsTrigger>
+        </TabsList>
+        <TabsContent value="stock" className="space-y-6">
+
       {lowStock.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
           <Card data-tour="inventory-low-stock" className="border-amber-500/20 bg-amber-500/5 glass-card">
@@ -306,6 +324,14 @@ export default function InventoryPage() {
                                   </Button>
                                 </>
                               )}
+                              {canTransfer && item.quantity > 0 && (
+                                <Button variant="ghost" size="icon" className="h-7 w-7" title="Transfer to branch" onClick={() => setTransferItemId(item.id)}>
+                                  <ArrowLeftRight className="h-3.5 w-3.5" /><span className="sr-only">Transfer</span>
+                                </Button>
+                              )}
+                              <Button variant="ghost" size="icon" className="h-7 w-7" title="Stock history" onClick={() => setHistoryItem(item)}>
+                                <History className="h-3.5 w-3.5" /><span className="sr-only">History</span>
+                              </Button>
                               <Button data-tour="inventory-edit" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditItem(item)}>
                                 <Pencil className="h-3.5 w-3.5" /><span className="sr-only">Edit</span>
                               </Button>
@@ -326,6 +352,14 @@ export default function InventoryPage() {
           </CardContent>
         </Card>
       </motion.div>
+        </TabsContent>
+        <TabsContent value="history"><InventoryHistoryTab /></TabsContent>
+        <TabsContent value="transfers"><InventoryTransfersTab inventory={inventory} canTransfer={canTransfer} /></TabsContent>
+        <TabsContent value="reports"><InventoryReportsTab inventory={inventory} /></TabsContent>
+      </Tabs>
+
+      <ItemHistoryDialog item={historyItem} onClose={() => setHistoryItem(null)} />
+      {transferItemId && <TransferDialog open={!!transferItemId} onOpenChange={(o) => !o && setTransferItemId(null)} inventory={inventory} initialItemId={transferItemId} />}
 
       {/* Add Item Dialog */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
