@@ -52,34 +52,17 @@ export function useCreateInventoryTransaction() {
       reference?: string;
       notes?: string;
     }) => {
-      const totalCost = input.quantity * input.unit_cost;
-      const { error } = await (supabase as any).from("inventory_transactions").insert({
-        org_id: currentOrg?.org_id,
-        inventory_id: input.inventory_id,
-        transaction_type: input.transaction_type,
-        quantity: input.quantity,
-        unit_cost: input.unit_cost,
-        total_cost: totalCost,
-        reference: input.reference || null,
-        notes: input.notes || null,
-        created_by: (await supabase.auth.getUser()).data.user?.id,
+      // Atomic, audited stock movement (records balance before/after and who did it)
+      const { error } = await (supabase as any).rpc("record_inventory_movement", {
+        p_org_id: currentOrg?.org_id,
+        p_inventory_id: input.inventory_id,
+        p_type: input.transaction_type,
+        p_quantity: input.quantity,
+        p_unit_cost: input.unit_cost,
+        p_reference: input.reference || null,
+        p_notes: input.notes || null,
       });
       if (error) throw error;
-
-      // Update inventory unit_cost and quantity for purchases
-      if (input.transaction_type === "purchase") {
-        const { data: item } = await (supabase as any).from("inventory").select("quantity").eq("id", input.inventory_id).single();
-        const newQty = (item?.quantity || 0) + input.quantity;
-        await (supabase as any).from("inventory").update({
-          quantity: newQty,
-          unit_cost: input.unit_cost,
-          last_restocked: new Date().toISOString().split("T")[0],
-        }).eq("id", input.inventory_id);
-      } else if (input.transaction_type === "usage" || input.transaction_type === "adjustment") {
-        const { data: item } = await (supabase as any).from("inventory").select("quantity").eq("id", input.inventory_id).single();
-        const newQty = Math.max(0, (item?.quantity || 0) - input.quantity);
-        await (supabase as any).from("inventory").update({ quantity: newQty }).eq("id", input.inventory_id);
-      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["inventory-transactions"] });
